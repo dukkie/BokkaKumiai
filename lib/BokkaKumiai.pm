@@ -12,8 +12,15 @@ has 'time' => (
 	is => 'rw',
 	isa => 'Str', 	#-本当は分数
 	required => 1,
+	default => '4/4',
 );
 
+has 'beat' => (	#- 2, 4, 8, 16
+	is => 'rw',
+	isa => 'Int',
+	default => 4,
+	required => 1,
+);
 has 'pattern' => (
 	is => 'rw',
 	isa => 'Str',
@@ -47,6 +54,7 @@ my $guitar_cords = +{
 	'C69'=>[qw(0 3 2 2 3 X)],
 	'CM7'=>[qw(0 0 0 2 3 X)],
 	'D' => [qw(2 3 2 0 0 X)],
+	'D7'=> [qw(2 1 2 0 0 X)],
 	'Dm'=> [qw(1 3 2 0 0 X)],
 	'Dm7'=>[qw(1 1 2 0 0 X)],
 	'E'=>  [qw(0 0 1 2 2 0)],
@@ -64,6 +72,7 @@ my $guitar_cords = +{
 	'Bb'=> [qw(1 3 3 3 1 1)],
 	'Bb7'=>[qw(1 3 1 3 1 1)],
 	'B'=>  [qw(2 4 4 4 2 2)],
+	'Bm'=> [qw(2 3 4 4 2 2)],
 };
 #- ハイノートも欲しい
 
@@ -84,7 +93,6 @@ sub print_code_progress {
 		}
 	}
 	print $output . "\n";
-
 }
 
 #- コード進行をパターンから生成
@@ -263,38 +271,21 @@ sub guitar_tab {
 	my $self = shift;
 	my $one_bar_str = 1;
 	my $guitar_str = [qw(e B G D A E)];
-	my $one_row;
 	my $tab = +{};
-	my $tab_block = +{};
+	my $print_out_block = +{};	#-書き出し用単位
+	my $beat_tick = +{};
 	my $tab_blocks = 0;
-	my $sprint_format_num = 0;
-	#- 拍子で長さを決める。フォーマト&build_tab_format;
-	if ( $self->{time} =~ /(\d+)\/(\d+)/ ) {
-		my $child = $1;
-		my $mother = $2;
-		my $hyphens = 1 + ( $mother * $child );
-		 $sprint_format_num =  $mother * $child ; 
-		for ( my $i = 0; $i < $hyphens; $i++ ) {
-			$one_row .= '-';
-		}
-
-	##} elsif ( $self->{time} eq '3/4' ) {
-
-
-	}
-	##print "\$one_row->$one_row\n";
-
-	#- 運指を決める
-
-
-	#- 採譜する かつタブ書式ブロックを作る。
+	#- 拍子で長さを決める。フォーマトbuild_tab_format;
+	my ( $child, $mother, $one_bar_length, $one_beat_length, $one_row, $one_bar_tick ) = $self->build_tab_format;
 	my $bar_cnt = 0;
 	my $bars_by_one_row = $self->{bars_by_one_row};
+	#- コード進行に応じた一小節ごとのループ
 	for my $bar ( @{$self->{cord_progress}} ) {
+		#- 一行目のコード進行表示部分
 		if ( $bar_cnt % $bars_by_one_row == 0 ) {
-			$tab_block->{$tab_blocks} .= '   ';
+			$print_out_block->{$tab_blocks} .= '   ';
 		} else {
-			$tab_block->{$tab_blocks} .= '  ';
+			$print_out_block->{$tab_blocks} .= '  ';
 		}
 		my ( @cords );
 		if ( $bar =~ / / ) {
@@ -302,65 +293,110 @@ sub guitar_tab {
 		} else {
 			push @cords, $bar;
 		}
-		my ( $sprintf_format_num ) = int( $sprint_format_num / ( $#cords + 1 ));
+		my ( $sprintf_format_num ) = int( $one_bar_length / ( $#cords + 1 )); #- 3つあるときは？？
 		my ( $code_num ) = 0;
 		for my $cord ( @cords ) {
 			my $format = '%-' . $sprintf_format_num . 's';
-			$tab_block->{$tab_blocks} .= sprintf($format, $cord);
+			$print_out_block->{$tab_blocks} .= sprintf($format, $cord);
 		}
-		if ( $bar_cnt % $bars_by_one_row == 1 ) {
-			$tab_block->{$tab_blocks} .= "\n";
+		if ( $bar_cnt % $bars_by_one_row == ($bars_by_one_row -1) ) {
+			$print_out_block->{$tab_blocks} .= "\n";
 		}
 		#- 以上ヘッダづくり
-		#- ここに伯ごとに+出力
-		my $str_num = 0;
-		for my $str ( @{$guitar_str} ) {
+		my $string_num = 0;
+		for my $string ( @{$guitar_str} ) {
 			my $one_tab_row = $one_row;
 			#- コードの内容に応じて、指をおく。
-			#- ビートも考慮したい。
 			my ( $cord_num ) = 0;
 			for my $cord ( @cords ) {
 				if ( $cord  =~ /(\/[A-Z#b]+)/ ) {
 					$cord =~ s/$1//g;
 				}
-				if ( ( defined $guitar_cords->{$cord}->[$str_num] ) &&  ( $guitar_cords->{$cord}->[$str_num] ne '' )) {
-					my $str_len = length ( $guitar_cords->{$cord}->[$str_num] );
+				if ( ( defined $guitar_cords->{$cord}->[$string_num] ) &&  ( $guitar_cords->{$cord}->[$string_num] ne '' )) {
+					my $string_len = length ( $guitar_cords->{$cord}->[$string_num] );
+					#- 置き換え位置をここで決めている。
 					my $offset = 1 + ( $sprintf_format_num * $cord_num );
-					#print 'note:' , $guitar_cords->{$cord}->[$str_num] ,"\n";
+					#print 'note:' , $guitar_cords->{$cord}->[$string_num] ,"\n";
 					#print "\$offset->$offset\n";
 					#print "\$one_tab_row->$one_tab_row\n";
-					#print "\$str_len->$str_len\n";
-					substr($one_tab_row, $offset, $str_len, $guitar_cords->{$cord}->[$str_num]);
+					#print "\$string_len->$string_len\n";
+					#- 弦を押さえる。
+					substr($one_tab_row, $offset, $string_len, $guitar_cords->{$cord}->[$string_num]);
+					#- 弱拍の考慮 mute beat
+					my ( $mute_beat_offset );
+					if ( $self->{beat} == 2) {
+						$mute_beat_offset = $sprintf_format_num - 3 + ($sprintf_format_num * $cord_num );
+					} elsif ( $self->{beat} == 4) {
+						$mute_beat_offset = $sprintf_format_num - 3 + ($sprintf_format_num * $cord_num );
+						
+					} elsif ( $self->{beat} == 8 ) {
+						$mute_beat_offset = $sprintf_format_num - 1 + ($sprintf_format_num * $cord_num );
+					} elsif ( $self->{beat} == 16 ) {
+						$mute_beat_offset = $sprintf_format_num - 1 + ($sprintf_format_num * $cord_num );
+					} 
+					substr($one_tab_row, $mute_beat_offset, $string_len, $guitar_cords->{$cord}->[$string_num]);
+					
 				}
 				$cord_num++;
 			}
 
 			if ( $bar_cnt % $bars_by_one_row == 0 ) {
-				$tab->{$bar_cnt}->{$str} =  "$str:$one_tab_row|"; #- 譜面を書く
+				$tab->{$bar_cnt}->{$string} =  "$string:$one_tab_row|"; #- 譜面を書く
 			} else {
-				$tab->{$bar_cnt}->{$str} =  "$one_tab_row|";	#- 譜面を書く
+				$tab->{$bar_cnt}->{$string} =  "$one_tab_row|";	#- 譜面を書く
 			}
-			#- 最後に来て、かつ2ブロック目ならまとめて書きだす
-			if (( $bar_cnt % $bars_by_one_row  == 1) && ( $#$guitar_str == $str_num )) {
+			#- 最後に来て、かつ2ブロック目ならまとめて書きだしハッシュを作る
+			if (( $bar_cnt % $bars_by_one_row == ( $bars_by_one_row - 1)) && ( $#$guitar_str == $string_num )) {
+			##if (( $bar_cnt % $bars_by_one_row  == 1) && ( $#$guitar_str == $string_num )) {
+				#- 一拍ごとの区切りをつける
+				$print_out_block->{$tab_blocks} .= ' ';
+				for ( my $i = 0; $i < $bars_by_one_row; $i++ ) {
+					$print_out_block->{$tab_blocks} .= ' '. $one_bar_tick;
+				}
+				$print_out_block->{$tab_blocks} .= "\n";
+				#- 各弦ごとのタブを連結
 				for my $Str ( @{$guitar_str} ) {
 					for my $i ( sort {$a<=>$b} keys %$tab ) {
-						$tab_block->{$tab_blocks} .= $tab->{$i}->{$Str};
+						$print_out_block->{$tab_blocks} .= $tab->{$i}->{$Str};
 					}
-					$tab_block->{$tab_blocks} .=  "\n";
+					$print_out_block->{$tab_blocks} .=  "\n";
 				}
 				$tab_blocks++;
 				$tab = undef;
 			}
-			$str_num++;
+			$string_num++;
 		}
 		$bar_cnt++;
 	}
 	#- 出力する
-	for my $cnt ( sort {$a<=>$b} keys %$tab_block ) {
-		print $tab_block->{$cnt};
+	for my $cnt ( sort {$a<=>$b} keys %$print_out_block ) {
+		print $print_out_block->{$cnt};
 	}
 }
 
+#- 一小節のフォーマットづくり
+sub build_tab_format {
+	my $self = shift;
+	my ( $one_bar_length, $one_beat_length, $one_row, $one_bar_tick);
+	my ( $child, $mother ) = split ('/', $self->{time} );
+	if ( ( $mother == 4 ) || ( $mother == 2) )  {
+		$one_bar_length =  $mother * $child ;
+	} elsif ( ( $mother == 8 ) || ( $mother == 16 ) )  {
+		$one_bar_length =  ( $mother * $child ) / 2 ;
+	}
+	$one_beat_length = $one_bar_length / $child;
+	for ( my $i = 0; $i < $one_bar_length; $i++ ) {
+		$one_row .= '-';
+		if ( $i % $one_beat_length == 0 ) {
+			$one_bar_tick .= '+';
+		} else {
+			$one_bar_tick .= ' ';
+		}
+	}
+	$one_row .= '-';	#-見やすくするため一つ足す
+	$one_bar_tick = ' ' . $one_bar_tick;
+	return ( $child, $mother, $one_bar_length, $one_beat_length, $one_row, $one_bar_tick);
+}
 
 1;
 __END__
