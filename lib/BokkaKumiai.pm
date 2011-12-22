@@ -1,23 +1,51 @@
 package BokkaKumiai;
 use Mouse;
+use Mouse::Util::TypeConstraints;
 our $VERSION = '0.01';
+
+#- type
+subtype 'BokkaKumiai::Keys'
+	=> as 'Str',
+	=> where { $_ =~ /^(C|C#|Db|D|D#|Eb|E|F|F#|Gb|G|G#|Ab|A|A#|Bb|B)$/ }
+	=> message { "This key ($_) is not musical keys!" }
+;
+subtype 'BokkaKumiai::Time'
+	=> as 'Str',
+	=> where { $_ =~ /^\d+\/\d+$/ }
+	=> message { "This time ($_) is not musical time!" }
+;
+subtype 'BokkaKumiai::Beat'
+	=> as 'Int',
+	=> where { $_ =~ /^(2|4|8|16)$/ },
+	=> message { "This beat ($_) is not musical beat!" }
+;
+subtype 'BokkaKumiai::Tension'
+	=> as 'Int',
+	=> where { $_ =~ /^(undef|0|1|2|3|4)$/ }
+	=> message { "This tention level ($_) is not supperted by BokkaKumiai.enter 1-4" }
+;
+subtype 'BokkaKumiai::OneRow'
+	=> as 'Int',
+	=> where { $_ =~ /^(2|4)$/ }
+	=> message { "This bars_by_one_row  ($_) is not supperted by BokkaKumiai: enter 2 or 4" }
+;
 
 #- input 
 has 'key' => (
 	is => 'rw',
-	isa => 'Str',
+	isa => 'BokkaKumiai::Keys',
 	required => 1,
 );
 has 'time' => (
 	is => 'rw',
-	isa => 'Str', 	#-本当は分数
+	isa => 'BokkaKumiai::Time',
 	required => 1,
 	default => '4/4',
 );
 
-has 'beat' => (	#- 2, 4, 8, 16
+has 'beat' => (	
 	is => 'rw',
-	isa => 'Int',
+	isa => 'BokkaKumiai::Beat',
 	default => 4,
 	required => 1,
 );
@@ -34,45 +62,60 @@ has 'cord_progress' => (	#- コード進行
 
 has 'tension' => (
 	is => 'rw',
-	isa => 'Int',
+	isa => 'BokkaKumiai::Tension',
 );
 
 has 'bars_by_one_row' => (	#- 一行の小節数（タブ）
 	is => 'rw',
-	isa => 'Int',
+	isa => 'BokkaKumiai::OneRow',
 	default => 2,
 );
 __PACKAGE__->meta->make_immutable;
 no Mouse;
-
+no Mouse::Util::TypeConstraints;
 
 use Data::Dumper;
 
 my $guitar_cords = +{
-	'C' => [qw(0 1 0 2 3 X)],
-	'C6'=> [qw(0 1 2 2 3 X)],
-	'C69'=>[qw(0 3 2 2 3 X)],
-	'CM7'=>[qw(0 0 0 2 3 X)],
-	'D' => [qw(2 3 2 0 0 X)],
-	'D7'=> [qw(2 1 2 0 0 X)],
-	'Dm'=> [qw(1 3 2 0 0 X)],
-	'Dm7'=>[qw(1 1 2 0 0 X)],
-	'E'=>  [qw(0 0 1 2 2 0)],
-	'E7'=> [qw(0 0 1 0 2 0)],
-	'Em'=> [qw(0 0 0 2 2 0)],
-	'Em7'=>[qw(0 0 0 0 2 0)],
-	'F' => [qw(1 1 2 3 3 1)],
-	'FM7'=>[qw(0 1 2 3 3 1)],
-	'G' => [qw(3 0 0 0 2 3)],
-	'G7'=> [qw(1 0 0 0 2 3)],
-	'Ab'=> [qw(4 4 5 6 6 4)],
-	'Ab7'=>[qw(4 4 5 4 6 4)],
-	'Am'=> [qw(0 1 2 2 0 0)],
-	'Am7'=>[qw(0 1 0 2 0 0)],
-	'Bb'=> [qw(1 3 3 3 1 1)],
-	'Bb7'=>[qw(1 3 1 3 1 1)],
-	'B'=>  [qw(2 4 4 4 2 2)],
-	'Bm'=> [qw(2 3 4 4 2 2)],
+	'standard' => +{
+		'C' => [qw(0 1 0 2 3 X)],
+		'C6'=> [qw(0 1 2 2 3 X)],
+		'C69'=>[qw(0 3 2 2 3 X)],
+		'CM7'=>[qw(0 0 0 2 3 X)],
+		'C7' =>[qw(0 1 3 2 3 X)],
+		'C#' =>[qw(4 6 6 6 4 4)],
+		'C#M7'=>[qw(4 6 6 6 4 4)],
+		'D' => [qw(2 3 2 0 0 X)],
+		'D7'=> [qw(2 1 2 0 0 X)],
+		'Dm'=> [qw(1 3 2 0 0 X)],
+		'Dm7'=>[qw(1 1 2 0 0 X)],
+		'Eb'=> [qw(6 8 8 8 6 6)],
+		'Eb7'=>[qw(6 8 6 8 6 6)],
+		'E'=>  [qw(0 0 1 2 2 0)],
+		'E7'=> [qw(0 0 1 0 2 0)],
+		'Em'=> [qw(0 0 0 2 2 0)],
+		'Em7'=>[qw(0 0 0 0 2 0)],
+		'F' => [qw(1 1 2 3 3 1)],
+		'Fm'=> [qw(1 1 1 3 3 1)],
+		'FM7'=>[qw(0 1 2 3 3 X)],
+		'FM79'=>[qw(0 1 0 3 3 X)],
+		'G' => [qw(3 0 0 0 2 3)],
+		'Gm'=> [qw(3 3 3 5 5 3)],
+		'G7'=> [qw(1 0 0 0 2 3)],
+		'Ab'=> [qw(4 4 5 6 6 4)],
+		'Ab7'=>[qw(4 4 5 4 6 4)],
+		'Am'=> [qw(0 1 2 2 0 0)],
+		'Am7'=>[qw(0 1 0 2 0 0)],
+		'Bb'=> [qw(1 3 3 3 1 1)],
+		'Bbm'=>[qw(1 2 3 3 1 1)],
+		'Bb7'=>[qw(1 3 1 3 1 1)],
+		'Bbm7'=>[qw(1 2 1 3 1 1)],
+		'B'=>  [qw(2 4 4 4 2 2)],
+		'Bm'=> [qw(2 3 4 4 2 2)],
+	},
+	'funky' => +{
+
+	},
 };
 #- ハイノートも欲しい
 
@@ -109,6 +152,8 @@ sub mk_code_progress {
 		$self->{cord_progress} = ['I', 'VIm', 'IIm', 'V7', 'I', 'VIm', 'IIm', 'V7'];
 	} elsif ( $self->{pattern} eq 'major3' ) {
 		$self->{cord_progress} = ['bVI', 'bVII', 'I', 'I'];
+	} elsif ( $self->{pattern} eq 'iwantyouback' ) {
+		$self->{cord_progress} = ['I','IV','VIm I/III IVM7 I','IIm7 V7 I I'];
 	}
 	if ( $self->{tension} )  {
 		$self->add_tension;
@@ -312,16 +357,12 @@ sub guitar_tab {
 				if ( $cord  =~ /(\/[A-Z#b]+)/ ) {
 					$cord =~ s/$1//g;
 				}
-				if ( ( defined $guitar_cords->{$cord}->[$string_num] ) &&  ( $guitar_cords->{$cord}->[$string_num] ne '' )) {
-					my $string_len = length ( $guitar_cords->{$cord}->[$string_num] );
+				if ( ( defined $guitar_cords->{standard}->{$cord}->[$string_num] ) &&  ( $guitar_cords->{standard}->{$cord}->[$string_num] ne '' )) {
+					my $string_len = length ( $guitar_cords->{standard}->{$cord}->[$string_num] );
 					#- 置き換え位置をここで決めている。
 					my $offset = 1 + ( $sprintf_format_num * $cord_num );
-					#print 'note:' , $guitar_cords->{$cord}->[$string_num] ,"\n";
-					#print "\$offset->$offset\n";
-					#print "\$one_tab_row->$one_tab_row\n";
-					#print "\$string_len->$string_len\n";
 					#- 弦を押さえる。
-					substr($one_tab_row, $offset, $string_len, $guitar_cords->{$cord}->[$string_num]);
+					substr($one_tab_row, $offset, $string_len, $guitar_cords->{standard}->{$cord}->[$string_num]);
 					#- 弱拍の考慮 mute beat
 					my ( $mute_beat_offset );
 					if ( $self->{beat} == 2) {
@@ -334,7 +375,7 @@ sub guitar_tab {
 					} elsif ( $self->{beat} == 16 ) {
 						$mute_beat_offset = $sprintf_format_num - 1 + ($sprintf_format_num * $cord_num );
 					} 
-					substr($one_tab_row, $mute_beat_offset, $string_len, $guitar_cords->{$cord}->[$string_num]);
+					substr($one_tab_row, $mute_beat_offset, $string_len, $guitar_cords->{standard}->{$cord}->[$string_num]);
 					
 				}
 				$cord_num++;
