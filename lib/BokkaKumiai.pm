@@ -55,7 +55,7 @@ has 'pattern' => (
 	required => 1,
 );
 
-has 'cord_progress' => (	#- コード進行
+has 'chord_progress' => (	#- コード進行
 	is => 'rw',
 	isa => 'ArrayRef',
 );
@@ -76,15 +76,18 @@ no Mouse::Util::TypeConstraints;
 
 use Data::Dumper;
 
-my $guitar_cords = +{
+#- customize your favorite chords
+#- if undefined, substituted by auto calculated chords.
+my $guitar_chords = +{
 	'standard' => +{
 		'C' => [qw(0 1 0 2 3 X)],
+		'Cm' =>[qw(3 4 5 5 3 3)],
 		'C6'=> [qw(0 1 2 2 3 X)],
 		'C69'=>[qw(0 3 2 2 3 X)],
 		'CM7'=>[qw(0 0 0 2 3 X)],
 		'C7' =>[qw(0 1 3 2 3 X)],
 		'C#' =>[qw(4 6 6 6 4 4)],
-		'C#M7'=>[qw(4 6 6 6 4 4)],
+		'C#M7'=>[qw(4 6 5 6 4 4)],
 		'D' => [qw(2 3 2 0 0 X)],
 		'D7'=> [qw(2 1 2 0 0 X)],
 		'Dm'=> [qw(1 3 2 0 0 X)],
@@ -103,6 +106,7 @@ my $guitar_cords = +{
 		'Gm'=> [qw(3 3 3 5 5 3)],
 		'G7'=> [qw(1 0 0 0 2 3)],
 		'Ab'=> [qw(4 4 5 6 6 4)],
+		'Ab6'=>[qw(X 6 5 6 6 X)],
 		'Ab7'=>[qw(4 4 5 4 6 4)],
 		'Am'=> [qw(0 1 2 2 0 0)],
 		'Am7'=>[qw(0 1 0 2 0 0)],
@@ -114,21 +118,19 @@ my $guitar_cords = +{
 		'Bm'=> [qw(2 3 4 4 2 2)],
 	},
 	'funky' => +{
-
+		#- now developing..
 	},
 };
-#- ハイノートも欲しい
-
 
 #- サブルーチン群
-
-
 #- コード進行出力
-sub print_code_progress {
+sub print_chord_progress {
 	my ( $self ) = shift;
-	my ( $output ) = "$self->{time}\n";
+	my ( $output ) = "Time: $self->{time}\n";
+	$output .= "Beat: $self->{beat}\n";
+	$output .= "Key : $self->{key}\n";
 	my ( $cntr ) = 0;
-	foreach my $bar ( @{$self->{cord_progress}} ){
+	foreach my $bar ( @{$self->{chord_progress}} ){
 		$output .= sprintf("| %-8s", $bar);
 		$cntr++;
 		if ( $cntr % 4 eq 0 ) {
@@ -137,23 +139,32 @@ sub print_code_progress {
 	}
 	print $output . "\n";
 }
+#- 拍とビートのチェック（制約）
+sub check_time_and_beat {
+	my $self = shift;
+	if ( ( $self->{beat} >= 8 ) &&  ( $self->{time} ne '8/8' ) ) {
+		print "Error: 8 or 16 beat must be used in 8/8 time music.\n";
+		exit;	
+	}
+}
 
 #- コード進行をパターンから生成
-sub mk_code_progress {
+sub mk_chord_progress {
 	my $self = shift;
+	$self->check_time_and_beat;
 	my $cp;	#- array ref
 	if ( $self->{pattern} eq 'pachelbel' ) {
-		$self->{cord_progress} = ['I V/VII', 'VIm IIIm/V', 'IV I/III', 'IV/II V7'];
+		$self->{chord_progress} = ['I V/VII', 'VIm IIIm/V', 'IV I/III', 'IV/II V7'];
 	} elsif ( $self->{pattern} eq 'blues' ) {
-		$self->{cord_progress} = ['I', 'I', 'I', 'I', 'IV', 'IV', 'I', 'I', 'V', 'IV', 'I', 'V7'];
+		$self->{chord_progress} = ['I', 'I', 'I', 'I', 'IV', 'IV', 'I', 'I', 'V', 'IV', 'I', 'V7'];
 	} elsif ( $self->{pattern} eq 'vamp' ) {
-		$self->{cord_progress} = ['I', 'I', 'IV', 'IV', 'I', 'I', 'IV', 'IV'];
+		$self->{chord_progress} = ['I', 'I', 'IV', 'IV', 'I', 'I', 'IV', 'IV'];
 	} elsif ( $self->{pattern} eq 'icecream' ) {
-		$self->{cord_progress} = ['I', 'VIm', 'IIm', 'V7', 'I', 'VIm', 'IIm', 'V7'];
+		$self->{chord_progress} = ['I', 'VIm', 'IIm', 'V7', 'I', 'VIm', 'IIm', 'V7'];
 	} elsif ( $self->{pattern} eq 'major3' ) {
-		$self->{cord_progress} = ['bVI', 'bVII', 'I', 'I'];
+		$self->{chord_progress} = ['bVI', 'bVII', 'I', 'I'];
 	} elsif ( $self->{pattern} eq 'iwantyouback' ) {
-		$self->{cord_progress} = ['I','IV','VIm I/III IVM7 I','IIm7 V7 I I'];
+		$self->{chord_progress} = ['I','IV','VIm I/III IVM7 I','IIm7 V7 I I'];
 	}
 	if ( $self->{tension} )  {
 		$self->add_tension;
@@ -180,23 +191,23 @@ sub ajust_keys {
 		'VII' => 11
 	};
 	$wholetone = $self->arrange_order( $wholetone );
-	my ( $many_codes ) = 0;
-	my ( $pedal_codes ) = 0;
-	foreach my $bar ( @{$self->{cord_progress}} ) {
-		my @codes;
+	my ( $many_chords ) = 0;
+	my ( $pedal_chords ) = 0;
+	foreach my $bar ( @{$self->{chord_progress}} ) {
+		my @chords;
 		if ( $bar =~ /\s+/ ) {
-			@codes = split (/\s+/, $bar);
-			$many_codes = 1;
+			@chords = split (/\s+/, $bar);
+			$many_chords = 1;
 		} else {
-			push @codes, $bar;
+			push @chords, $bar;
 		}
-		foreach my $code ( @codes ) {
+		foreach my $chord ( @chords ) {
 			my ( @notes );
-			if ( $code =~ /\// ) {
-				@notes = split (/\//, $code );
-				$pedal_codes = 1;
+			if ( $chord =~ /\// ) {
+				@notes = split (/\//, $chord );
+				$pedal_chords = 1;
 			} else {
-				push @notes, $code;
+				push @notes, $chord;
 			}
 			foreach my $note ( @notes ) {	#- 1コードレベル
 				my ( $minor_Major );
@@ -211,16 +222,16 @@ sub ajust_keys {
 					$note = $wholetone->[$pntr];
 				}
 			}
-			if ( $pedal_codes ) {
-				$code = join ('/', @notes);
+			if ( $pedal_chords ) {
+				$chord = join ('/', @notes);
 			} else {
-				$code = $notes[0];
+				$chord = $notes[0];
 			}
 		}
-		if ( $many_codes ) {
-			$bar = join (' ', @codes);
+		if ( $many_chords ) {
+			$bar = join (' ', @chords);
 		} else {
-			$bar = $codes[0];
+			$bar = $chords[0];
 		}
 	}
 
@@ -265,48 +276,52 @@ sub add_tension {
 		'bVII' => ['7'],
 		'VII' => [], 
 	};
-	my ( $many_codes ) = 0;
-	my ( $pedal_codes ) = 0;
-	foreach my $bar ( @{$self->{cord_progress}} ) {
-		my @codes;
+	my ( $many_chords ) = 0;
+	my ( $pedal_chords ) = 0;
+	foreach my $bar ( @{$self->{chord_progress}} ) {
+		my @chords;
 		if ( $bar =~ /\s+/ ) {
-			@codes = split (/\s+/, $bar);
-			$many_codes = 1;
+			@chords = split (/\s+/, $bar);
+			$many_chords = 1;
 		} else {
-			push @codes, $bar;
+			push @chords, $bar;
 		}
-		foreach my $code ( @codes ) {
-			my $pedal_cord;
-			if ( $code =~ '/' ) {
-				( $code, $pedal_cord) = split ('/', $code);
+		foreach my $chord ( @chords ) {
+			my $pedal_chord;
+			if ( $chord =~ '/' ) {
+				( $chord, $pedal_chord) = split ('/', $chord);
 			}
-			$code =~ s/\d+$//g;
+			$chord =~ s/\d+$//g;
 			my ( $minor_Major );
-			if ( $code =~ /([mM])$/ ) {
+			if ( $chord =~ /([mM])$/ ) {
 				$minor_Major = $1;
-				$code =~ s/$minor_Major//;
+				$chord =~ s/$minor_Major//;
 			}	
 			#- def tension
 			my $tension = '';
 			for ( my $i = ($self->{tension} - 1); $i >= 0; $i-- ) {
-				if ( $tension_notes->{$code}->[$i] ) {
-					$tension = $tension_notes->{$code}->[$i];
+				if ( $tension_notes->{$chord}->[$i] ) {
+					$tension = $tension_notes->{$chord}->[$i];
 					last;
 				}
 			}
 			if ( $minor_Major ) {
-				$code .= $minor_Major . $tension;
+				$chord .= $minor_Major . $tension;
 			} else { 
-				$code .= $tension;
+				$chord .= $tension;
 			}
-			if ( $pedal_cord ) {
-				$code .= '/' . $pedal_cord;
+			# bug patch :-)
+			$chord =~ s/MM/M/;
+			$chord =~ s/mm/m/;
+
+			if ( $pedal_chord ) {
+				$chord .= '/' . $pedal_chord;
 			}
 		}
-		if ( $many_codes ) {
-			$bar = join (' ', @codes);
+		if ( $many_chords ) {
+			$bar = join (' ', @chords);
 		} else {
-			$bar = $codes[0];
+			$bar = $chords[0];
 		}
 	}
 }
@@ -325,60 +340,97 @@ sub guitar_tab {
 	my $bar_cnt = 0;
 	my $bars_by_one_row = $self->{bars_by_one_row};
 	#- コード進行に応じた一小節ごとのループ
-	for my $bar ( @{$self->{cord_progress}} ) {
+	for my $bar ( @{$self->{chord_progress}} ) {
 		#- 一行目のコード進行表示部分
 		if ( $bar_cnt % $bars_by_one_row == 0 ) {
 			$print_out_block->{$tab_blocks} .= '   ';
 		} else {
 			$print_out_block->{$tab_blocks} .= '  ';
 		}
-		my ( @cords );
+		my ( @chords );
 		if ( $bar =~ / / ) {
-			@cords = split (/ /, $bar);
+			@chords = split (/ /, $bar);
 		} else {
-			push @cords, $bar;
+			push @chords, $bar;
 		}
-		my ( $sprintf_format_num ) = int( $one_bar_length / ( $#cords + 1 )); #- 3つあるときは？？
-		my ( $code_num ) = 0;
-		for my $cord ( @cords ) {
-			my $format = '%-' . $sprintf_format_num . 's';
-			$print_out_block->{$tab_blocks} .= sprintf($format, $cord);
+		my ( $chords_in_one_bar ) = $#chords + 1; #-一小節内のコード数
+		my ( $bytes_for_one_chord ) = int( $one_bar_length / $chords_in_one_bar ); #- 3つあるときは？？ #-ひとつのコードごとに持つ拍数
+		my ( $chord_num ) = 0;
+		for my $chord ( @chords ) {
+			my $format = '%-' . $bytes_for_one_chord . 's';
+			$print_out_block->{$tab_blocks} .= sprintf($format, $chord);
 		}
 		if ( $bar_cnt % $bars_by_one_row == ($bars_by_one_row -1) ) {
 			$print_out_block->{$tab_blocks} .= "\n";
 		}
 		#- 以上ヘッダづくり
 		my $string_num = 0;
+		#- ギターの弦ごとのループ
 		for my $string ( @{$guitar_str} ) {
 			my $one_tab_row = $one_row;
 			#- コードの内容に応じて、指をおく。
-			my ( $cord_num ) = 0;
-			for my $cord ( @cords ) {
-				if ( $cord  =~ /(\/[A-Z#b]+)/ ) {
-					$cord =~ s/$1//g;
+			my ( $chord_num ) = 0;
+			for my $chord ( @chords ) {
+				my ( $chords_in_one_bar ) = $#chords + 1; #-一小節内のコード数
+				my ( $bytes_for_one_chord ) = int( $one_bar_length / $chords_in_one_bar ); #-ひとつのコードごとに持つ拍数
+				if ( $chord  =~ /(\/[A-Z#b]+)/ ) {
+					$chord =~ s/$1//g;
 				}
-				if ( ( defined $guitar_cords->{standard}->{$cord}->[$string_num] ) &&  ( $guitar_cords->{standard}->{$cord}->[$string_num] ne '' )) {
-					my $string_len = length ( $guitar_cords->{standard}->{$cord}->[$string_num] );
+				if ( ( defined $guitar_chords->{standard}->{$chord}->[$string_num] ) &&  ( $guitar_chords->{standard}->{$chord}->[$string_num] ne '' )) {
+					#- コードが明示されていない場合、相対的に決めるルーチンも欲しい。
+					my $string_len = length ( $guitar_chords->{standard}->{$chord}->[$string_num] );
 					#- 置き換え位置をここで決めている。
-					my $offset = 1 + ( $sprintf_format_num * $cord_num );
-					#- 弦を押さえる。
-					substr($one_tab_row, $offset, $string_len, $guitar_cords->{standard}->{$cord}->[$string_num]);
-					#- 弱拍の考慮 mute beat
-					my ( $mute_beat_offset );
-					if ( $self->{beat} == 2) {
-						$mute_beat_offset = $sprintf_format_num - 3 + ($sprintf_format_num * $cord_num );
-					} elsif ( $self->{beat} == 4) {
-						$mute_beat_offset = $sprintf_format_num - 3 + ($sprintf_format_num * $cord_num );
-						
-					} elsif ( $self->{beat} == 8 ) {
-						$mute_beat_offset = $sprintf_format_num - 1 + ($sprintf_format_num * $cord_num );
-					} elsif ( $self->{beat} == 16 ) {
-						$mute_beat_offset = $sprintf_format_num - 1 + ($sprintf_format_num * $cord_num );
-					} 
-					substr($one_tab_row, $mute_beat_offset, $string_len, $guitar_cords->{standard}->{$cord}->[$string_num]);
-					
+					#- 強拍は一応押さえる。
+					for ( my $j = 0; $j < $bytes_for_one_chord; $j++ ) {
+						if ( ( $self->{beat} == 2 ) or ( $self->{beat} == 4) ) {
+							#- 拍の頭なら
+							if ( $j % $one_beat_length == 0 ) {
+								my $offset = 1 + ($bytes_for_one_chord  *  $chord_num  ) + $j;
+								#- 弦を押さえる。
+								substr($one_tab_row, $offset, $string_len, $guitar_chords->{standard}->{$chord}->[$string_num]);
+							}
+						} elsif ( $self->{beat} == 8 )  {
+							#- 強拍
+							if ( ( $bytes_for_one_chord >= ( $one_beat_length * 4 ) ) && ( $j % ( $one_beat_length * 4 )  == 0 ))  {
+								#- 1コードが2分音符以上続く場合
+								my $offset = 1 + ($bytes_for_one_chord  *  $chord_num * 2 ) + $j;
+								#- 強拍
+								substr($one_tab_row, $offset, $string_len, $guitar_chords->{standard}->{$chord}->[$string_num]);
+								substr($one_tab_row, ($offset + 16) , $string_len, $guitar_chords->{standard}->{$chord}->[$string_num]);
+								#- 弱拍の考慮 mute beat
+								substr($one_tab_row, ($offset + 12),  $string_len, $guitar_chords->{standard}->{$chord}->[$string_num]);
+								substr($one_tab_row, ($offset + 28),  $string_len, $guitar_chords->{standard}->{$chord}->[$string_num]);
+							} elsif ( ( $bytes_for_one_chord = $one_beat_length ) && ( $j % $one_beat_length == 0 ))  {
+								#- 1コード一つの四分音符の場合
+								my $offset = 1 + ($bytes_for_one_chord  *  $chord_num * 2 ) + $j;
+								substr($one_tab_row, $offset, $string_len, $guitar_chords->{standard}->{$chord}->[$string_num]);
+								#- 弱拍
+								substr($one_tab_row, ($offset + 4), $string_len, $guitar_chords->{standard}->{$chord}->[$string_num]);
+
+							}
+						} elsif ( $self->{beat} == 16) {
+							if ( $string_num >= 3 ) {
+								#- 16ビートの場合、第四弦以下は弾かない。
+								next;
+							}
+							#- 強拍
+							if ( $j % ( $one_beat_length * 4 )  == 0 )  {
+								#- あくまでもサンプルカッティング（センスよくしたいw
+								my $offset = 1 + ($bytes_for_one_chord  *  $chord_num ) + $j;
+								substr($one_tab_row, $offset, $string_len, $guitar_chords->{standard}->{$chord}->[$string_num]);
+								substr($one_tab_row, ( $offset + 2) , $string_len, $guitar_chords->{standard}->{$chord}->[$string_num]);
+								substr($one_tab_row, ( $offset + 4) , $string_len, $guitar_chords->{standard}->{$chord}->[$string_num]);
+								if ( $bytes_for_one_chord >= ( $one_beat_length * 4 ) ) {
+									substr($one_tab_row, ( $offset + 8 ) , $string_len, $guitar_chords->{standard}->{$chord}->[$string_num]);
+									substr($one_tab_row, ( $offset + 10 ) , $string_len, $guitar_chords->{standard}->{$chord}->[$string_num]);
+									substr($one_tab_row, ( $offset + 14 ) , $string_len, $guitar_chords->{standard}->{$chord}->[$string_num]);
+
+								} 
+							}
+						}
+					}
 				}
-				$cord_num++;
+				$chord_num++;
 			}
 
 			if ( $bar_cnt % $bars_by_one_row == 0 ) {
@@ -388,7 +440,6 @@ sub guitar_tab {
 			}
 			#- 最後に来て、かつ2ブロック目ならまとめて書きだしハッシュを作る
 			if (( $bar_cnt % $bars_by_one_row == ( $bars_by_one_row - 1)) && ( $#$guitar_str == $string_num )) {
-			##if (( $bar_cnt % $bars_by_one_row  == 1) && ( $#$guitar_str == $string_num )) {
 				#- 一拍ごとの区切りをつける
 				$print_out_block->{$tab_blocks} .= ' ';
 				for ( my $i = 0; $i < $bars_by_one_row; $i++ ) {
@@ -428,8 +479,12 @@ sub build_tab_format {
 	$one_beat_length = $one_bar_length / $child;
 	for ( my $i = 0; $i < $one_bar_length; $i++ ) {
 		$one_row .= '-';
-		if ( $i % $one_beat_length == 0 ) {
+		if ( ( $self->{beat} =~ /^(2|4)$/ ) && ( $i % $one_beat_length == 0 ) )  {
 			$one_bar_tick .= '+';
+		} elsif ( ( $self->{beat} =~ /^(8|16)$/)  && ( $i %  8 == 0 ) )  {
+			$one_bar_tick .= '+';
+		} elsif ( ( $self->{beat} =~ /^(8|16)$/ ) && ( $i %  4 == 0 ) )  {
+			$one_bar_tick .= '-';
 		} else {
 			$one_bar_tick .= ' ';
 		}
@@ -444,17 +499,50 @@ __END__
 
 =head1 NAME
 
-BokkaKumiai - Music Code Progression Analysis Module.
+BokkaKumiai - Music Chord Progression Analysis Module, with writing Guitar Tabs methods.
 
 
 =head1 SYNOPSIS
+    #Pachelbel's Canon's Guitar Tab in C.
+    use BokkaKumiai;
+    my $cp = BokkaKumiai->new(
+        'key' => 'C',
+        'time' => '4/4',
+        'beat' => 4,
+        'pattern' => 'pachelbel',  #- 'Pachelbel's Canon'
+        'bars_by_one_row' => 2,
+    );
+    $cp->mk_chord_progress;
+    $cp->print_chord_progress;
+    $cp->guitar_tab;	
 
-  use BokkaKumiai;
+
+
+    #Jackson5 "I want You Back " Guitar Tab in Ab.
+    use BokkaKumiai;
+    my $cp = BokkaKumiai->new(
+        'key' => 'Ab',
+        'time' => '8/8',
+        'beat' => 16, 
+        'pattern' => 'iwantyouback',
+        'tension' => 2,
+        'bars_by_one_row' => 2,
+    );
+    $cp->mk_chord_progress;
+    $cp->print_chord_progress;
+    $cp->guitar_tab;	
 
 =head1 DESCRIPTION
 
-BokkaKumiai is
+My dream is to make "Intelligent Music DataBase System", which has Chord Progression DB and analyze music making techniques easily to bring up new talents in the future.
+BokkaKumiai is made to analyze Music Chord Progression.
 
+Give BokkaKumiai, key(ex. C, Am.. ), time(4/4, 8/8, 3/4 etc..) and beat(4beat, 8beat, etc..),
+and define chord progression pattern,
+you will get guitar tab sample, automatically!!
+
+This version is ALPHAAA version, I'm developing in now, so forgive some bugs and tell me please!!
+ 
 =head1 AUTHOR
 
 DUKKIE E<lt>dukkiedukkie@yahoo.co.jpE<gt>
