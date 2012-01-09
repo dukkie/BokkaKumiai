@@ -1,7 +1,7 @@
 package BokkaKumiai;
 use Mouse;
 use Mouse::Util::TypeConstraints;
-our $VERSION = '0.01';
+our $VERSION = '0.02';
 
 #- type
 subtype 'BokkaKumiai::Keys'
@@ -141,8 +141,8 @@ sub print_chord_progress {
 }
 #- 拍とビートのチェック（制約）
 sub check_time_and_beat {
-	my $self = shift;
-	if ( ( $self->{beat} >= 8 ) &&  ( $self->{time} ne '8/8' ) ) {
+	my ( $self, $beat, $time ) = @_;
+	if ( ( $beat >= 8 ) &&  ( $time ne '8/8' ) ) {
 		print "Error: 8 or 16 beat must be used in 8/8 time music.\n";
 		exit;	
 	}
@@ -151,7 +151,7 @@ sub check_time_and_beat {
 #- コード進行をパターンから生成
 sub mk_chord_progress {
 	my $self = shift;
-	$self->check_time_and_beat;
+	$self->check_time_and_beat($self->{beat}, $self->{time});;
 	my $cp;	#- array ref
 	if ( $self->{pattern} eq 'pachelbel' ) {
 		$self->{chord_progress} = ['I V/VII', 'VIm IIIm/V', 'IV I/III', 'IV/II V7'];
@@ -169,11 +169,11 @@ sub mk_chord_progress {
 	if ( $self->{tension} )  {
 		$self->add_tension;
 	}
-	$self->ajust_keys;
+	$self->adjust_keys;
 }
 
 #- キーに合わせる
-sub ajust_keys {
+sub adjust_keys {
 	my ( $self ) = shift;
 	my ( $wholetone ) = 	['C','C#', 'D',  'Eb',  'E', 'F', 'F#','G', 'Ab', 'A',  'Bb',  'B'];
 	my ( $relative_tone ) = {
@@ -385,7 +385,7 @@ sub guitar_tab {
 						if ( ( $self->{beat} == 2 ) or ( $self->{beat} == 4) ) {
 							#- 拍の頭なら
 							if ( $j % $one_beat_length == 0 ) {
-								my $offset = 1 + ($bytes_for_one_chord  *  $chord_num  ) + $j;
+								my $offset = $self->return_offset($self->{beat}, $bytes_for_one_chord, $chord_num, $j);
 								#- 弦を押さえる。
 								substr($one_tab_row, $offset, $string_len, $guitar_chords->{standard}->{$chord}->[$string_num]);
 							}
@@ -393,7 +393,7 @@ sub guitar_tab {
 							#- 強拍
 							if ( ( $bytes_for_one_chord >= ( $one_beat_length * 4 ) ) && ( $j % ( $one_beat_length * 4 )  == 0 ))  {
 								#- 1コードが2分音符以上続く場合
-								my $offset = 1 + ($bytes_for_one_chord  *  $chord_num * 2 ) + $j;
+								my $offset = $self->return_offset($self->{beat}, $bytes_for_one_chord, $chord_num, $j);
 								#- 強拍
 								substr($one_tab_row, $offset, $string_len, $guitar_chords->{standard}->{$chord}->[$string_num]);
 								substr($one_tab_row, ($offset + 16) , $string_len, $guitar_chords->{standard}->{$chord}->[$string_num]);
@@ -402,7 +402,7 @@ sub guitar_tab {
 								substr($one_tab_row, ($offset + 28),  $string_len, $guitar_chords->{standard}->{$chord}->[$string_num]);
 							} elsif ( ( $bytes_for_one_chord = $one_beat_length ) && ( $j % $one_beat_length == 0 ))  {
 								#- 1コード一つの四分音符の場合
-								my $offset = 1 + ($bytes_for_one_chord  *  $chord_num * 2 ) + $j;
+								my $offset = $self->return_offset($self->{beat}, $bytes_for_one_chord, $chord_num, $j);
 								substr($one_tab_row, $offset, $string_len, $guitar_chords->{standard}->{$chord}->[$string_num]);
 								#- 弱拍
 								substr($one_tab_row, ($offset + 4), $string_len, $guitar_chords->{standard}->{$chord}->[$string_num]);
@@ -416,7 +416,7 @@ sub guitar_tab {
 							#- 強拍
 							if ( $j % ( $one_beat_length * 4 )  == 0 )  {
 								#- あくまでもサンプルカッティング（センスよくしたいw
-								my $offset = 1 + ($bytes_for_one_chord  *  $chord_num ) + $j;
+								my $offset = $self->return_offset($self->{beat}, $bytes_for_one_chord, $chord_num, $j);
 								substr($one_tab_row, $offset, $string_len, $guitar_chords->{standard}->{$chord}->[$string_num]);
 								substr($one_tab_row, ( $offset + 2) , $string_len, $guitar_chords->{standard}->{$chord}->[$string_num]);
 								substr($one_tab_row, ( $offset + 4) , $string_len, $guitar_chords->{standard}->{$chord}->[$string_num]);
@@ -464,6 +464,21 @@ sub guitar_tab {
 	for my $cnt ( sort {$a<=>$b} keys %$print_out_block ) {
 		print $print_out_block->{$cnt};
 	}
+}
+
+#-弦上のオフセット戻し
+sub return_offset {
+	my ( $self, $beat, $bytes_for_one_chord, $chord_num, $j) = @_;
+	if ( $beat !~ /^\d+$/ ) {
+		die "beat must be number: $beat";
+	}
+	if ( ( $beat == 2 ) || ( $beat == 4) || ( $beat == 16 )) {
+		return ( 1 + ($bytes_for_one_chord  *  $chord_num  ) + $j );
+	} elsif ( $beat == 8)  {
+		return ( 1 + ($bytes_for_one_chord  *  $chord_num * 2 ) + $j );
+	}
+
+
 }
 
 #- 一小節のフォーマットづくり
